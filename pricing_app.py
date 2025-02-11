@@ -130,6 +130,7 @@ if 'Date' in data.columns:
             start_date = datetime(end_date.year, 1, 1)
         date_range = (start_date.date(), end_date.date())
 
+    # Convert dates to datetime.date objects for consistent comparison
     data = data[(data['Date'].dt.date >= date_range[0]) & 
                 (data['Date'].dt.date <= date_range[1])]
 
