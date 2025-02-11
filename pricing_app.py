@@ -7,7 +7,7 @@ import numpy as np
 st.set_page_config(page_title="Pricing Analysis Dashboard", layout="wide")
 
 # Add title and description
-st.title("Pricing Analysis Dashboard")
+st.title("Pricing Analysis - Anthony")
 st.markdown("Upload your pricing data to analyze trends and comparisons")
 
 # File upload
