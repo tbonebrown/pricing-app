@@ -27,7 +27,7 @@ st.markdown("""
     """, unsafe_allow_html=True)
 
 # Add title and description with more context
-st.title("🎯 Advanced Pricing Analysis Dashboard")
+st.title("🎯 Dane's Wonderful World of Pricing")
 st.markdown("""
     This dashboard provides comprehensive pricing analytics including trend analysis, 
     distribution patterns, sales correlations, and price elasticity calculations. 
