@@ -3,7 +3,7 @@ import pandas as pd
 import plotly.express as px
 import plotly.graph_objects as go
 import numpy as np
-from datetime import datetime
+from datetime import datetime, timedelta
 
 # Set page config with improved styling
 st.set_page_config(
@@ -47,7 +47,9 @@ def generate_sample_data():
     for date in dates:
         for product in products:
             base_price = base_prices[product]
+            # Add seasonal variation
             seasonal_factor = 1 + 0.1 * np.sin(2 * np.pi * date.dayofyear / 365)
+            # Add random noise
             price = base_price * seasonal_factor * (1 + np.random.normal(0, 0.05))
             
             for region in regions:
@@ -68,9 +70,11 @@ def calculate_elasticity(group):
     price_pct_change = group['Price'].pct_change()
     demand_pct_change = group['Units_Sold'].pct_change()
     
+    # Calculate elasticity where percentage changes are not 0
     mask = (price_pct_change != 0) & (price_pct_change.notna()) & (demand_pct_change.notna())
     elasticities = demand_pct_change[mask] / price_pct_change[mask]
     
+    # Return average elasticity, excluding outliers
     elasticities = elasticities[elasticities.abs() < 10]  # Remove extreme outliers
     return elasticities.mean()
 
@@ -95,18 +99,17 @@ except Exception as e:
 # Enhanced sidebar with more analytical options
 st.sidebar.header("📊 Analysis Controls")
 
-# Advanced date filtering with proper datetime handling
+# Advanced date filtering
 if 'Date' in data.columns:
-    # Ensure Date column is datetime
     data['Date'] = pd.to_datetime(data['Date'])
-    min_date = data['Date'].min()
-    max_date = data['Date'].max()
+    min_date = data['Date'].min().date()
+    max_date = data['Date'].max().date()
     
     date_range = st.sidebar.date_input(
         "📅 Date Range",
-        value=(min_date.date(), max_date.date()),
-        min_value=min_date.date(),
-        max_value=max_date.date()
+        value=(min_date, max_date),
+        min_value=min_date,
+        max_value=max_date
     )
     
     # Add quick date range selectors
@@ -116,21 +119,23 @@ if 'Date' in data.columns:
     )
     
     if quick_ranges != "Custom":
-        end_date = pd.to_datetime(data['Date'].max())
+        end_date = data['Date'].max()
         if quick_ranges == "Last 7 Days":
-            start_date = end_date - pd.Timedelta(days=7)
+            start_date = end_date - timedelta(days=7)
         elif quick_ranges == "Last 30 Days":
-            start_date = end_date - pd.Timedelta(days=30)
+            start_date = end_date - timedelta(days=30)
         elif quick_ranges == "Last Quarter":
-            start_date = end_date - pd.Timedelta(days=90)
+            start_date = end_date - timedelta(days=90)
         else:  # Year to Date
-            start_date = pd.to_datetime(f"{end_date.year}-01-01")
+            start_date = datetime(end_date.year, 1, 1)
         date_range = (start_date.date(), end_date.date())
 
-    # Convert date_range to pandas datetime for filtering
+    # Convert dates to datetime.date objects for consistent comparison
+    # Convert date_range bounds to pandas Timestamps
     start_date = pd.to_datetime(date_range[0])
     end_date = pd.to_datetime(date_range[1])
-    data = data[(data['Date'] >= start_date) & (data['Date'] <= end_date)]
+    data = data[(data['Date'] >= start_date) & 
+                (data['Date'] <= end_date)]
 
 # Enhanced filters with select all/none options
 if 'Product' in data.columns:
@@ -172,11 +177,13 @@ aggregation = st.sidebar.selectbox(
 tab1, tab2, tab3 = st.tabs(["📊 Price Analysis", "💰 Sales Analysis", "📐 Price Elasticity"])
 
 with tab1:
+    # Price Analysis Tab
     col1, col2 = st.columns(2)
 
     with col1:
         st.subheader("📈 Price Trends Over Time")
         if 'Date' in data.columns and 'Price' in data.columns:
+            # Aggregate data based on selected time period
             if aggregation == "Weekly":
                 trend_data = data.groupby([pd.Grouper(key='Date', freq='W')])['Price'].mean().reset_index()
             elif aggregation == "Monthly":
@@ -226,6 +233,7 @@ with tab1:
             )
             st.plotly_chart(fig_dist, use_container_width=True)
 
+    # Product comparison
     if 'Product' in data.columns and 'Price' in data.columns:
         st.subheader("📦 Product Performance Analysis")
         
@@ -257,6 +265,7 @@ with tab1:
                 st.plotly_chart(fig_revenue, use_container_width=True)
 
 with tab2:
+    # Sales Analysis Tab
     if 'Units_Sold' in data.columns and 'Price' in data.columns:
         st.subheader("💰 Price-Sales Relationship Analysis")
         
@@ -291,6 +300,7 @@ with tab2:
             st.plotly_chart(fig_scatter, use_container_width=True)
         
         with col6:
+            # Sales trends over time
             if 'Date' in data.columns:
                 sales_trend = data.groupby('Date')['Units_Sold'].sum().reset_index()
                 fig_sales = px.line(
@@ -302,6 +312,7 @@ with tab2:
                 st.plotly_chart(fig_sales, use_container_width=True)
 
 with tab3:
+    # Price Elasticity Tab
     if all(col in data.columns for col in ['Price', 'Units_Sold']):
         col_elasticity1, col_elasticity2 = st.columns(2)
         
@@ -311,6 +322,7 @@ with tab3:
             if 'Product' in data.columns:
                 elasticities = data.groupby('Product').apply(calculate_elasticity)
                 
+                # Create elasticity visualization
                 fig_elasticity = go.Figure()
                 
                 for product in elasticities.index:
@@ -330,11 +342,13 @@ with tab3:
                     showlegend=False
                 )
                 
+                # Add horizontal line at y=-1 for unit elasticity reference
                 fig_elasticity.add_hline(y=-1, line_dash="dash", line_color="red",
                                        annotation_text="Unit Elasticity")
                 
                 st.plotly_chart(fig_elasticity, use_container_width=True)
                 
+                # Add interpretation
                 for product in elasticities.index:
                     elasticity = elasticities[product]
                     if pd.notna(elasticity):
@@ -350,6 +364,7 @@ with tab3:
         with col_elasticity2:
             st.markdown("### Revenue Impact Calculator")
             
+            # Add price change simulator
             selected_product = st.selectbox(
                 "Select Product",
                 options=data['Product'].unique() if 'Product' in data.columns else ['All Products']
@@ -363,6 +378,7 @@ with tab3:
                 step=1
             )
             
+            # Get current metrics for selected product
             if selected_product == 'All Products':
                 current_price = data['Price'].mean()
                 current_demand = data['Units_Sold'].mean()
@@ -373,6 +389,7 @@ with tab3:
                 current_demand = product_data['Units_Sold'].mean()
                 elasticity = calculate_elasticity(product_data)
             
+            # Calculate impact
             if pd.notna(elasticity):
                 price_change_decimal = price_change_pct / 100
                 demand_change_decimal = elasticity * price_change_decimal
@@ -384,6 +401,7 @@ with tab3:
                 new_revenue = new_price * new_demand
                 revenue_change_pct = ((new_revenue - current_revenue) / current_revenue) * 100
                 
+                # Display results
                 st.markdown("#### Impact Analysis")
                 
                 metrics_col1, metrics_col2 = st.columns(2)
@@ -407,6 +425,7 @@ with tab3:
                         f"{revenue_change_pct:+.1f}%"
                     )
                 
+                # Revenue impact visualization
                 fig_revenue_impact = go.Figure()
                 
                 fig_revenue_impact.add_trace(go.Bar(
@@ -424,6 +443,7 @@ with tab3:
                 
                 st.plotly_chart(fig_revenue_impact, use_container_width=True)
                 
+                # Add recommendation
                 st.markdown("#### Recommendation")
                 if revenue_change_pct > 0:
                     st.success(f"✅ The proposed price change is projected to increase revenue by {revenue_change_pct:.1f}%")
@@ -440,12 +460,7 @@ col7, col8, col9, col10 = st.columns(4)
 
 with col7:
     avg_price = data['Price'].mean()
-    if 'Date' in data.columns:
-        comparison_date = pd.to_datetime(date_range[0])
-        previous_data = data[data['Date'].dt.normalize() < comparison_date]
-        prev_avg_price = previous_data['Price'].mean() if not previous_data.empty else avg_price
-    else:
-        prev_avg_price = avg_price
+    prev_avg_price = data[data['Date'] < date_range[0]]['Price'].mean() if 'Date' in data.columns else avg_price
     price_delta = ((avg_price - prev_avg_price) / prev_avg_price * 100) if prev_avg_price != 0 else 0
     st.metric(
         "Average Price",
